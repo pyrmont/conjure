@@ -35,17 +35,29 @@ for path in "${file_paths[@]}"; do
       exit 1
   fi
 
-  # Read the contents of the input file
-  content=$(<"$input_file")
+  # Create a temporary file
+  temp_file=$(mktemp)
 
-  # Escape only double quotation marks that aren't already escaped
-  escaped_content=$(
-    echo "$content" |
-    awk '{printf "%s\\n",$0}' |
-    sed 's/\([^\\]\)"/\1\\"/g; s/^"/\\"/g; s/\\""/\\"\\"/g; s/[&/\]/\\&/g')
+  # Process the input file: escape special characters, newlines and double quotes
+  sed -e 's/&/\\\&/g' \
+    -e 's/"/\\"/g' \
+    -e 's/$/\\n/' \
+    "$input_file" | tr -d '\n' > "$temp_file"
 
-  sed -i '' "s/${placeholder}/${escaped_content}/" "$output_file"
+  # Process the template file and generate the output
+  output=$(awk -v placeholder="$placeholder" -v temp_file="$temp_file" '
+      BEGIN {
+          getline escaped_content < temp_file
+          close(temp_file)
+      }
+      {
+          gsub(placeholder, escaped_content)
+          print
+      }
+      ' "$output_file")
 
-  # echo "Placeholder text replaced successfully in $output_file"
+  echo "$output" > $output_file
 
+  # Remove the temporary file
+  rm "$temp_file"
 done
