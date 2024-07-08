@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Form of placeholder
+placeholder="__CONJURE_EMBED__"
+
 # Check if the directory path is provided as argument
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <directory_path>"
@@ -27,7 +30,6 @@ for path in "${file_paths[@]}"; do
   input_file="$path"
   input_file_no_ext=${path%.*}
   output_file="lua${input_file_no_ext:3}.lua"
-  placeholder="EMBED_PLACEHOLDER"
 
   # Check if the input file exists
   if [ ! -f "$input_file" ]; then

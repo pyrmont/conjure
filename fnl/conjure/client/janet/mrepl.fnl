@@ -41,7 +41,7 @@
 (def form-node? ts.node-surrounded-by-form-pair-chars?)
 
 (def prelude
-  "EMBED_PLACEHOLDER")
+  "__CONJURE_EMBED__")
 
 (defn unbatch [msgs]
   {:out (->> msgs
