@@ -20,6 +20,7 @@ compile:
 	rm -rf lua
 	deps/aniseed/scripts/embed.sh aniseed conjure
 	ANISEED_EMBED_PREFIX=conjure deps/aniseed/scripts/compile.sh
+	scripts/embed.sh fnl/conjure/client
 	cp deps/bencode/bencode.lua lua/conjure/remote/transport/bencode/impl.lua
 
 test:
