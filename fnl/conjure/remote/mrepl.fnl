@@ -65,7 +65,6 @@
           (opts.on-failure err)
           (do
             (opts.on-success)
-            (conn.send {:op "sess.new"})
             (conn.sock:read_start (client.wrap enqueue-message)))))))
 
   (set conn

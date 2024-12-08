@@ -61,7 +61,6 @@ local function connect(opts)
         return opts["on-failure"](err)
       else
         opts["on-success"]()
-        conn.send({op = "sess.new"})
         return conn.sock:read_start(client.wrap(enqueue_message))
       end
     end

@@ -1,12 +1,13 @@
 (local {: autoload} (require :nfnl.module))
-(local a (autoload :conjure.aniseed.core))
 (local client (autoload :conjure.client))
 (local config (autoload :conjure.config))
+(local handler (autoload :conjure.client.janet.grapple.handler))
 (local log (autoload :conjure.log))
 (local mapping (autoload :conjure.mapping))
+(local n (autoload :nfnl.core))
 (local remote (autoload :conjure.remote.mrepl))
-(local s (autoload :nfnl.string))
-(local text (autoload :conjure.text))
+(local request (autoload :conjure.client.janet.grapple.request))
+(local state (autoload :conjure.client.janet.grapple.state))
 (local ts (autoload :conjure.tree-sitter))
 
 (local buf-suffix ".janet")
@@ -19,7 +20,8 @@
    {:janet
     {:mrepl
      {:connection {:default_host "127.0.0.1"
-                   :default_port "3737"}}}}})
+                   :default_port "3737"
+                   :lang "net.inqk/janet/1.0"}}}}})
 
 (when (config.get-in [:mapping :enable_defaults])
   (config.merge
@@ -29,67 +31,14 @@
        {:mapping {:connect "cc"
                   :disconnect "cd"}}}}}))
 
-(local state (client.new-state #(do {:conn nil})))
-
-(fn upcase [s n]
-  (let [start (string.sub s 1 n)
-        rest (string.sub s (+ n 1))]
-    (.. (string.upper start) rest)))
-
-(fn error-msg? [msg]
-  (= "err" msg.tag))
-
-(fn display-error [msg]
-  (log.append [(.. "# " msg.msg)]))
-
-(fn handle-sess-new [resp]
-  (a.assoc (state :conn) :session resp.sess)
-  (let [[impl-name impl-ver] resp.janet/impl
-        [serv-name serv-ver] resp.janet/serv]
-    (log.append [(.. "# Connected to "
-                     (upcase serv-name 1)
-                     " v"
-                     serv-ver
-                     " running "
-                     (upcase impl-name 1)
-                     " v"
-                     impl-ver
-                     " as session "
-                     resp.sess)])))
-
-(fn handle-env-eval [resp]
-  (if
-    (= "out" resp.tag)
-    (log.append [(.. "# (out) " resp.val)])
-
-    (= "err" resp.tag)
-    (log.append [(.. "# (err) " resp.value)])
-
-    (log.append [resp.val])))
-
-(fn handle-message [msg]
-  (when msg
-   (if
-    (error-msg? msg)
-    (display-error msg)
-
-    (= "sess.new" msg.op)
-    (handle-sess-new msg)
-
-    (= "env.eval" msg.op)
-    (handle-env-eval msg)
-
-    (do
-      (log.append ["# Unrecognised message"])))))
-
 (fn with-conn-or-warn [f opts]
-  (let [conn (state :conn)]
+  (let [conn (state.get :conn)]
     (if conn
       (f conn)
       (log.append ["# No connection"]))))
 
 (fn connected? []
-  (if (state :conn)
+  (if (state.get :conn)
     true
     false))
 
@@ -103,26 +52,28 @@
 (fn disconnect []
   (with-conn-or-warn
     (fn [conn]
+      (request.sess-end conn nil)
       (conn.destroy)
       (display-conn-status :disconnected)
-      (a.assoc (state) :conn nil))))
+      (n.assoc (state.get) :conn nil))))
 
 (fn connect [opts]
   (let [opts (or opts {})
         host (or opts.host (config.get-in [:client :janet :mrepl :connection :default_host]))
-        port (or opts.port (config.get-in [:client :janet :mrepl :connection :default_port]))]
+        port (or opts.port (config.get-in [:client :janet :mrepl :connection :default_port]))
+        lang (config.get-in [:client :janet :mrepl :connection :lang])]
 
     ; TODO: don't disconnect
-    (when (state :conn)
+    (when (state.get :conn)
       (disconnect))
 
     (local conn
       (remote.connect
         {:host host
          :port port
-         :lang "net.inqk/janet/1.0"
+         :lang lang
 
-         :on-message handle-message
+         :on-message handler.handle-message
 
          :on-failure
          (fn [err]
@@ -131,8 +82,9 @@
 
          :on-success
          (fn []
-           (a.assoc (state) :conn conn)
-           (display-conn-status :connected))
+           (n.assoc (state.get) :conn conn)
+           (display-conn-status :connected)
+           (request.sess-new conn opts))
 
          :on-error
          (fn [err]
@@ -146,22 +98,15 @@
 
 (fn eval-str [opts]
   (try-ensure-conn)
-  (let [conn (state :conn)]
-    (conn.send {:op "env.eval"
-                :code opts.code
-                :ns opts.file-path
-                :janet/col (a.get-in opts.range [:start 2] 1)
-                :janet/line (a.get-in opts.range [:start 1] 1)})))
-
-(fn doc-str [opts]
-  (try-ensure-conn)
-  (eval-str (a.update opts :code #(.. "(doc " $1 ")"))))
+  (request.env-eval (state.get :conn) opts))
 
 (fn eval-file [opts]
   (try-ensure-conn)
-  (eval-str
-    (a.assoc opts :code (.. "(do (dofile \"" opts.file-path
-                            "\" :env (fiber/getenv (fiber/current))) nil)"))))
+  (request.env-load (state.get :conn) opts))
+
+(fn doc-str [opts]
+  (try-ensure-conn)
+  (request.env-doc (state.get :conn) opts))
 
 (fn on-filetype []
   (mapping.buf
