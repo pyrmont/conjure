@@ -127,6 +127,11 @@
 (fn on-exit []
   (disconnect))
 
+(fn modify-client-exec-fn-opts [action f-name opts]
+  (if
+    (= :doc action)
+    (n.assoc opts :passive? true)))
+
 {: buf-suffix
  : comment-node?
  : comment-prefix
@@ -136,6 +141,7 @@
  : eval-file
  : eval-str
  : form-node?
+ : modify-client-exec-fn-opts
  : on-exit
  : on-filetype
  : on-load}
