@@ -18,19 +18,18 @@
   (var conn
     {:decode (trn.make-decode)
      :lang opts.lang
+     :msgs {}
      :queue []
      :session nil})
 
-  (fn send [msg]
+  (fn send [msg action]
     (let [id (uuid.v4)]
       (a.assoc msg :id id :lang conn.lang)
       (when conn.session
         (a.assoc msg :sess conn.session))
+      (a.assoc-in conn [:msgs id] {:msg msg :action action})
       (log.dbg "send" msg)
       (conn.sock:write (trn.encode msg))))
-
-  (fn handle-message [msg]
-    nil)
 
   (fn process-message [err chunk]
     (if (or err (not chunk))
@@ -39,7 +38,9 @@
            (a.run!
              (fn [msg]
                (log.dbg "receive" msg)
-               (opts.on-message msg))))))
+               (let [id msg.req
+                     action (a.get-in conn [:msgs id :action])]
+                 (opts.on-message msg action)))))))
 
   (fn process-queue []
     (set conn.awaiting-process? false)
@@ -60,7 +61,6 @@
   (fn handle-connect []
     (client.schedule-wrap
       (fn [err]
-        ; (log.dbg "connected")
         (if err
           (opts.on-failure err)
           (do

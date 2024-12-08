@@ -4,33 +4,41 @@
 (local state (autoload :conjure.client.janet.grapple.state))
 
 (fn sess-new [conn opts]
-  (conn.send {:op "sess.new"}))
+  (conn.send {:op "sess.new"}
+             opts.action))
 
 (fn sess-end [conn opts]
-  (conn.send {:op "sess.end"}))
+  (conn.send {:op "sess.end"}
+             opts.action))
 
 (fn sess-list [conn opts]
-  (conn.send {:op "sess.list"}))
+  (conn.send {:op "sess.list"}
+             opts.action))
 
 (fn serv-info [conn opts]
-  (conn.send {:op "serv.info"}))
+  (conn.send {:op "serv.info"}
+             opts.action))
 
 (fn serv-stop [conn opts]
-  (conn.send {:op "serv.stop"}))
+  (conn.send {:op "serv.stop"}
+             opts.action))
 
 (fn serv-rest [conn opts]
-  (conn.send {:op "serv.rest"}))
+  (conn.send {:op "serv.rest"}
+             opts.action))
 
 (fn env-eval [conn opts]
   (conn.send {:op "env.eval"
               :ns opts.file-path
               :code opts.code
               :col (n.get-in opts.range [:start 2] 1)
-              :line (n.get-in opts.range [:start 1] 1)}))
+              :line (n.get-in opts.range [:start 1] 1)}
+             opts.action))
 
 (fn env-load [conn opts]
   (conn.send {:op "env.load"
-              :path opts.file-path}))
+              :path opts.file-path}
+             opts.action))
 
 (fn env-stop [conn opts]
   (log.append ["# env.stop is not supported"]))
@@ -38,12 +46,14 @@
 (fn env-doc [conn opts]
   (conn.send {:op "env.doc"
               :ns opts.file-path
-              :sym opts.code}))
+              :sym opts.code}
+             opts.action))
 
 (fn env-cmpl [conn opts]
   (conn.send {:op "env.cmpl"
               :ns opts.file-path
-              :sym opts.code}))
+              :sym opts.code}
+             opts.action))
 
 {: sess-new
  : sess-end

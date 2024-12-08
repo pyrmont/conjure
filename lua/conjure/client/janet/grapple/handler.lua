@@ -1,6 +1,7 @@
 -- [nfnl] Compiled from fnl/conjure/client/janet/grapple/handler.fnl by https://github.com/Olical/nfnl, do not edit.
 local _local_1_ = require("nfnl.module")
 local autoload = _local_1_["autoload"]
+local editor = autoload("conjure.editor")
 local log = autoload("conjure.log")
 local n = autoload("nfnl.core")
 local state = autoload("conjure.client.janet.grapple.state")
@@ -14,7 +15,7 @@ local function error_msg_3f(msg)
   return ("err" == msg.tag)
 end
 local function display_error(msg)
-  return log.append({("# " .. msg.msg)})
+  return log.append({("# ! " .. msg)})
 end
 local function handle_sess_new(resp)
   n.assoc(state.get("conn"), "session", resp.sess)
@@ -25,9 +26,7 @@ local function handle_sess_new(resp)
   return log.append({("# Connected to " .. upcase(serv_name, 1) .. " v" .. serv_ver .. " running " .. upcase(impl_name, 1) .. " v" .. impl_ver .. " as session " .. resp.sess)})
 end
 local function handle_env_eval(resp)
-  if error_msg_3f(resp) then
-    return log.append({resp.msg})
-  elseif (("out" == resp.tag) and ("out" == resp.ch)) then
+  if (("out" == resp.tag) and ("out" == resp.ch)) then
     return log.append({("# (out) " .. resp.val)})
   elseif (("out" == resp.tag) and ("err" == resp.ch)) then
     return log.append({("# (err) " .. resp.val)})
@@ -35,10 +34,8 @@ local function handle_env_eval(resp)
     return log.append({resp.val})
   end
 end
-local function handle_env_doc(resp)
-  if error_msg_3f(resp) then
-    return log.append({resp.msg})
-  elseif ("ret" == resp.tag) then
+local function handle_env_doc(resp, action)
+  if ("doc" == action) then
     local path = resp["janet/sm"][1]
     local line = resp["janet/sm"][2]
     local col = resp["janet/sm"][3]
@@ -58,14 +55,24 @@ local function handle_env_doc(resp)
       return nil
     end
     return vim.api.nvim_create_autocmd("CursorMoved", {once = true, callback = _3_})
+  elseif ("def" == action) then
+    local path = resp["janet/sm"][1]
+    local line = resp["janet/sm"][2]
+    local col = resp["janet/sm"][3]
+    local stat = vim.loop.fs_stat(path)
+    if (stat and ("file" == stat.type)) then
+      return editor["go-to"](path, line, col)
+    else
+      return display_error("Oh no")
+    end
   else
     return nil
   end
 end
-local function handle_message(msg)
+local function handle_message(msg, action)
   if msg then
     if error_msg_3f(msg) then
-      return display_error(msg)
+      return display_error(msg.msg)
     elseif ("sess.new" == msg.op) then
       return handle_sess_new(msg)
     elseif ("sess.end" == msg.op) then
@@ -85,7 +92,7 @@ local function handle_message(msg)
     elseif ("env.stop" == msg.op) then
       return __fnl_global__handle_2denv_2dstop(msg)
     elseif ("env.doc" == msg.op) then
-      return handle_env_doc(msg)
+      return handle_env_doc(msg, action)
     elseif ("env.cmpl" == msg.op) then
       return __fnl_global__handle_2denv_2dcmpl(msg)
     else

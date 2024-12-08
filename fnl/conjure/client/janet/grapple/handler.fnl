@@ -1,4 +1,5 @@
 (local {: autoload} (require :nfnl.module))
+(local editor (autoload :conjure.editor))
 (local log (autoload :conjure.log))
 (local n (autoload :nfnl.core))
 (local state (autoload :conjure.client.janet.grapple.state))
@@ -13,7 +14,7 @@
   (= "err" msg.tag))
 
 (fn display-error [msg]
-  (log.append [(.. "# " msg.msg)]))
+  (log.append [(.. "# ! " msg)]))
 
 (fn handle-sess-new [resp]
   (n.assoc (state.get :conn) :session resp.sess)
@@ -32,9 +33,6 @@
 
 (fn handle-env-eval [resp]
   (if
-    (error-msg? resp)
-    (log.append [resp.msg])
-
     (and (= "out" resp.tag) (= "out" resp.ch))
     (log.append [(.. "# (out) " resp.val)])
 
@@ -43,45 +41,48 @@
 
     (log.append [resp.val])))
 
-(fn handle-env-doc [resp]
+(fn handle-env-doc [resp action]
   (if
-    (error-msg? resp)
-    (log.append [resp.msg])
-
-    (= "ret" resp.tag)
+    (= "doc" action)
     (let [[path line col] resp.janet/sm
-          buf (vim.api.nvim_create_buf false true)
-          lines (n.concat [resp.janet/type
-                           (.. path " on line " line ", column " col)
-                           ""]
-                          (str.split resp.val "\n"))
-          _ (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
-          width 50
-          height 10
-          win-opts {:relative "cursor"
-                    :width width
-                    :height height
-                    :col 0
-                    :row 1
-                    :anchor "NW"
-                    :style "minimal"
-                    :border "rounded"}
-          win (vim.api.nvim_open_win buf false win-opts)]
-      (vim.api.nvim_buf_set_option buf "wrap" true)
-      (vim.api.nvim_buf_set_option buf "linebreak" true)
-      (vim.api.nvim_buf_set_option buf "filetype" "markdown")
-      (vim.api.nvim_create_autocmd :CursorMoved
-                                   {:once true
-                                    :callback (fn []
-                                                (vim.api.nvim_win_close win true)
-                                                (vim.api.nvim_buf_delete buf {:force true})
-                                                nil)}))))
+         buf (vim.api.nvim_create_buf false true)
+         lines (n.concat [resp.janet/type
+                          (.. path " on line " line ", column " col)
+                          ""]
+                         (str.split resp.val "\n"))
+         _ (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
+         width 50
+         height 10
+         win-opts {:relative "cursor"
+                   :width width
+                   :height height
+                   :col 0
+                   :row 1
+                   :anchor "NW"
+                   :style "minimal"
+                   :border "rounded"}
+         win (vim.api.nvim_open_win buf false win-opts)]
+     (vim.api.nvim_buf_set_option buf "wrap" true)
+     (vim.api.nvim_buf_set_option buf "linebreak" true)
+     (vim.api.nvim_buf_set_option buf "filetype" "markdown")
+     (vim.api.nvim_create_autocmd :CursorMoved
+                                  {:once true
+                                   :callback (fn []
+                                               (vim.api.nvim_win_close win true)
+                                               (vim.api.nvim_buf_delete buf {:force true})
+                                               nil)}))
+    (= "def" action)
+    (let [[path line col] resp.janet/sm
+          stat (vim.loop.fs_stat path)]
+      (if (and stat (= "file" stat.type))
+        (editor.go-to path line col)
+        (display-error "Oh no")))))
 
-(fn handle-message [msg]
+(fn handle-message [msg action]
   (when msg
    (if
     (error-msg? msg)
-    (display-error msg)
+    (display-error msg.msg)
 
     (= "sess.new" msg.op)
     (handle-sess-new msg)
@@ -111,7 +112,7 @@
     (handle-env-stop msg)
 
     (= "env.doc" msg.op)
-    (handle-env-doc msg)
+    (handle-env-doc msg action)
 
     (= "env.cmpl" msg.op)
     (handle-env-cmpl msg)

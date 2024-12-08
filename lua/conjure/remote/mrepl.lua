@@ -8,19 +8,17 @@ local net = autoload("conjure.net")
 local trn = autoload("conjure.remote.transport.mrepl")
 local uuid = autoload("conjure.uuid")
 local function connect(opts)
-  local conn = {decode = trn["make-decode"](), lang = opts.lang, queue = {}, session = nil}
-  local function send(msg)
+  local conn = {decode = trn["make-decode"](), lang = opts.lang, msgs = {}, queue = {}, session = nil}
+  local function send(msg, action)
     local id = uuid.v4()
     a.assoc(msg, "id", id, "lang", conn.lang)
     if conn.session then
       a.assoc(msg, "sess", conn.session)
     else
     end
+    a["assoc-in"](conn, {"msgs", id}, {msg = msg, action = action})
     log.dbg("send", msg)
     return conn.sock:write(trn.encode(msg))
-  end
-  local function handle_message(msg)
-    return nil
   end
   local function process_message(err, chunk)
     if (err or not chunk) then
@@ -28,7 +26,9 @@ local function connect(opts)
     else
       local function _3_(msg)
         log.dbg("receive", msg)
-        return opts["on-message"](msg)
+        local id = msg.req
+        local action = a["get-in"](conn, {"msgs", id, "action"})
+        return opts["on-message"](msg, action)
       end
       return a["run!"](_3_, conn.decode(chunk))
     end

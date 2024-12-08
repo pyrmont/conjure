@@ -108,6 +108,10 @@
   (try-ensure-conn)
   (request.env-doc (state.get :conn) opts))
 
+(fn def-str [opts]
+  (try-ensure-conn)
+  (request.env-doc (state.get :conn) opts))
+
 (fn on-filetype []
   (mapping.buf
     :JanetDisconnect
@@ -129,7 +133,7 @@
 
 (fn modify-client-exec-fn-opts [action f-name opts]
   (if
-    (= :doc action)
+    (= "doc" action)
     (n.assoc opts :passive? true)))
 
 {: buf-suffix
@@ -137,6 +141,7 @@
  : comment-prefix
  : connect
  : disconnect
+ : def-str
  : doc-str
  : eval-file
  : eval-str
